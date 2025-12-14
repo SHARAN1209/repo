@@ -1,0 +1,137 @@
+public Collection<VallBoxesMaineExit> getShipContTowerDataWithRegAll(
+        SCTtabAllFilter destinationJson) {
+
+    List<VallBoxesMaineExit> listToReturn = new ArrayList<>();
+
+    try {
+        // Extract values safely
+        String destAll = destinationJson.getDest();
+        var filter = destinationJson.getFilter().getFirst();
+
+        String destFilter = filter.getDestS();
+        String regionFilter = filter.getReg();
+        String cust = filter.getCust();
+        String mjob = filter.getMjob();
+        String job = filter.getJob();
+        String salesOrder = filter.getSalesorder();
+        String serviceType = filter.getServtype();
+        String boxNumber = filter.getNumber();
+        String requestor = filter.getReq();
+        String owner = filter.getOwn();
+        String srlInv = filter.getSrlinv();
+
+        // --------------------------------------------------------------------
+        // HANDLE DESTINATION LIST
+        // --------------------------------------------------------------------
+        List<String> destinationList = ConstantVar
+                .convertStringIntoList(destAll, VAR.DELIMITATOR);
+
+        List<String> destinationFilterList;
+        if (destFilter == null || destFilter.equals("null") || destFilter.length() == 0 || destFilter.equals("%")) {
+            destinationFilterList = destinationList;
+        } else {
+            destinationFilterList = ConstantVar
+                    .convertStringIntoList(destFilter, VAR.DELIMITATOR);
+        }
+
+        // --------------------------------------------------------------------
+        // HANDLE REGION LIST
+        // --------------------------------------------------------------------
+        List<String> regionList = new ArrayList<>();
+        if (regionFilter != null && !regionFilter.equals("('%')")) {
+            regionList = ConstantVar.convertStringIntoList(regionFilter, VAR.DELIMITATOR);
+        }
+
+        // --------------------------------------------------------------------
+        // BASE SQL (NO CONCAT, NO formatted())
+        // --------------------------------------------------------------------
+        StringBuilder sql = new StringBuilder();
+        sql.append("""
+            SELECT 
+                t.invoice_type,t.destination,t.region,t.inc,t.customer,t.sales_order,t.project,
+                t.mother_job,t.box_number,t.box_status,
+                CASE 
+                    WHEN t.box_status = 'Ready to Ship' THEN 1 
+                    WHEN t.box_status = 'Assigned' THEN 2 
+                    WHEN t.box_status = 'In Progress' THEN 3 
+                    WHEN t.box_status = 'Scheduled' THEN 4 
+                    WHEN t.box_status = 'Not Shippable' THEN 5 
+                    WHEN t.box_status = 'Exit From WHS' THEN 6 
+                    ELSE NULL 
+                END AS index,
+                t.dimension,t.gross_weight,t.move_order,t.currency,t.box_amount,t.customs,t.customs_doc,
+                t.hazardous,t.whs,t.srl_invoice,t.srl_int_invoice,t.proforma,t.coo,t.service_type,t.loc,
+                t.payment_terms,t.cwd,t.otm_glc,t.pickup,t.ddt_date,t.forwarder,t.whs_exit,t.pm,
+                t.customer_po,t.awb,t.delivered,t.haz_doc,t.mo_pictures,t.backup_coo,t.embassy,
+                t.origin_cert,t.urgent,t.pod,t.pop,t.eur1,t.requestor,t.req_date,t.owner,t.own_date,
+                t.ship_req,t.invoice,t.nw,t.departure_date,t.note,t.box_closure_date,t.net_weight,
+                t.mo_creator,t.srl_invoice_date,t.srl_int_invoice_date,t.ready_to_ship,
+                t.expected_flight_vessel,t.update_time,t.insert_time,t.req_type,t.late_deliv_date,
+                t.on_hold,t.notified_date,t.notified_by,t.bol_otm,t.exp_mrn,t.exp_mrndate,t.pod_otm,
+                t.awb_otm,t.import_invoice,t.repair_tech_sheet,t.import_mrn,t.tracking_status,
+                t.tracking_timestamp,t.custom_regime,t.om_number,t.pei_number,t.delivered_date,
+                t.mo_urgency,t.pm_input,t.on_hold_date,t.pm_input_date,t.exit_want_date,t.site_want_date,
+                t.org_code,t.exp_inv,t.ci,t.exp_pl,t.letter_of_instr,t.coc,t.special_prog,t.carnets,
+                t.chamberized,t.legalized,t.blue_ink,t.translation,t.complete_system,t.other,
+                t.dgd_haz,t.pick_list,t.book_and_ship,t.lag_type,t.coc_upload,t.shipping_doc,
+                t.so_type,t.t_i_doc,t.so_line_type
+            FROM {h-schema}v_all_boxes_main_e_exit t
+            WHERE t.destination IS NOT NULL
+              AND t.destination <> ''
+              AND (t.destination IN :destinationList)
+              AND t.customer LIKE :cust
+              AND t.mother_job LIKE :mjob
+              AND t.project LIKE :project
+              AND t.sales_order LIKE :salesOrder
+              AND t.service_type LIKE :serviceType
+              AND t.box_number LIKE :boxNumber
+              AND t.requestor LIKE :requestor
+              AND t.owner LIKE :owner
+        """);
+
+        // --------------------------------------------------------------------
+        // OPTIONAL REGIONS
+        // --------------------------------------------------------------------
+        if (!regionList.isEmpty()) {
+            sql.append(" AND t.region IN :regionList ");
+        }
+
+        // --------------------------------------------------------------------
+        // OPTIONAL SRL INVOICE
+        // --------------------------------------------------------------------
+        if (srlInv != null && !srlInv.equals("%")) {
+            sql.append(" AND t.srl_invoice LIKE :srlInv ");
+        }
+
+        // --------------------------------------------------------------------
+        // CREATE SAFE NATIVE QUERY
+        // --------------------------------------------------------------------
+        Query query = em.createNativeQuery(sql.toString(), VallBoxesMaineExit.class);
+
+        // Bind parameters
+        query.setParameter("destinationList", destinationFilterList);
+        query.setParameter("cust", cust);
+        query.setParameter("mjob", mjob);
+        query.setParameter("project", job);
+        query.setParameter("salesOrder", salesOrder);
+        query.setParameter("serviceType", serviceType);
+        query.setParameter("boxNumber", boxNumber);
+        query.setParameter("requestor", requestor);
+        query.setParameter("owner", owner);
+
+        if (!regionList.isEmpty()) {
+            query.setParameter("regionList", regionList);
+        }
+
+        if (srlInv != null && !srlInv.equals("%")) {
+            query.setParameter("srlInv", srlInv);
+        }
+
+        listToReturn = query.getResultList();
+
+    } catch (Exception e) {
+        System.out.println("Exception in getShipContTowerDataWithRegAll: " + e.getMessage());
+    }
+
+    return listToReturn;
+}

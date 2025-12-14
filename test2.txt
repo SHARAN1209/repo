@@ -1,0 +1,83 @@
+public static final String Q_GET_SHIP_CONTROL_TOW_GET_DESTINATION_WITH_STATUS_ALL =
+    " SELECT  ..."
+    + " FROM {h-schema}v_all_boxes_main_e_exit t "
+    + " WHERE t.destination IS NOT NULL AND t.destination <> '' "
+    + " AND (t.destination IN (:destinations)) "
+    + " AND t.customer LIKE :customer "
+    + " AND t.mother_job LIKE :motherJob "
+    + " AND t.project LIKE :project "
+    + " AND t.sales_order LIKE :salesOrder "
+    + " AND t.service_type LIKE :serviceType "
+    + " AND t.box_number LIKE :boxNumber "
+    + " AND t.requestor LIKE :requestor "
+    + " AND t.owner LIKE :owner ";
+
+
+
+public Collection<VallBoxesMaineExit> getShipContTowerDataWithRegAll(
+        SCTtabAllFilter destinationJson) {
+
+    List<VallBoxesMaineExit> listToReturn = new ArrayList<>();
+
+    try {
+
+        // Determine destination list used in IN ()
+        String destinationSource =
+            (destinationJson.getFilter().getFirst().getDestS() == null ||
+             destinationJson.getFilter().getFirst().getDestS().equals("null") ||
+             destinationJson.getFilter().getFirst().getDestS().equals("%") ||
+             destinationJson.getFilter().getFirst().getDestS().isEmpty())
+                ? destinationJson.getDest()
+                : destinationJson.getFilter().getFirst().getDestS();
+
+        List<String> destinations =
+            ConstantVar.convertStringIntoList(destinationSource, VAR.DELIMITATOR);
+
+        // Start building safe SQL
+        StringBuilder sql = new StringBuilder(
+                QueryAppPredix.Q_GET_SHIP_CONTROL_TOW_GET_DESTINATION_WITH_STATUS_ALL);
+
+        // Optional region filter
+        String regionValue = destinationJson.getFilter().getFirst().getReg();
+        List<String> regions = null;
+
+        if (regionValue != null && !regionValue.equals("('%')")) {
+            regions = ConstantVar.convertStringIntoList(regionValue, VAR.DELIMITATOR);
+            sql.append(" AND t.region IN (:regions) ");
+        }
+
+        // Optional srl_invoice
+        if (!destinationJson.getFilter().getFirst().getSrlinv().equals("%")) {
+            sql.append(" AND t.srl_invoice LIKE :srlInv ");
+        }
+
+        // Create query
+        Query query = em.createNativeQuery(sql.toString(), VallBoxesMaineExit.class);
+
+        // Bind parameters
+        query.setParameter("destinations", destinations);
+        query.setParameter("customer", destinationJson.getFilter().getFirst().getCust());
+        query.setParameter("motherJob", destinationJson.getFilter().getFirst().getMjob());
+        query.setParameter("project", destinationJson.getFilter().getFirst().getJob());
+        query.setParameter("salesOrder", destinationJson.getFilter().getFirst().getSalesorder());
+        query.setParameter("serviceType", destinationJson.getFilter().getFirst().getServtype());
+        query.setParameter("boxNumber", destinationJson.getFilter().getFirst().getNumber());
+        query.setParameter("requestor", destinationJson.getFilter().getFirst().getReq());
+        query.setParameter("owner", destinationJson.getFilter().getFirst().getOwn());
+
+        if (regions != null) {
+            query.setParameter("regions", regions);
+        }
+
+        if (!destinationJson.getFilter().getFirst().getSrlinv().equals("%")) {
+            query.setParameter("srlInv", destinationJson.getFilter().getFirst().getSrlinv());
+        }
+
+        listToReturn = query.getResultList();
+
+    } catch (Exception e) {
+        System.out.println("Error in getShipContTowerDataWithRegAll: " + e.getMessage());
+    }
+
+    return listToReturn;
+}

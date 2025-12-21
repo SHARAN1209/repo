@@ -1,0 +1,140 @@
+package com.example.demo.service;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.example.demo.entity.ConstantVar;
+import com.example.demo.entity.SCTtabAllFilter;
+import com.example.demo.entity.VallBoxesMaineExit;
+
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import jakarta.persistence.Query;
+
+@Service
+public class ShippingControlTowerDataService {
+
+    @Autowired
+    ConstantVar VAR;
+
+    @PersistenceContext
+    private EntityManager em;
+
+    public static final String Q_GET_SHIP_CONTROL_TOW_GET_DESTINATION_WITH_STATUS_ALL =
+        "SELECT t.invoice_type, t.destination, t.region, t.inc, t.customer, t.sales_order, " +
+        "t.project, t.mother_job, t.box_number, t.box_status " +
+        "FROM {h-schema}v_all_boxes_main_e_exit t " +
+        "WHERE t.destination IS NOT NULL " +
+        "AND t.destination <> '' " +
+        "AND (t.destination IN :destinations OR t.destination='' OR t.destination=' ' OR t.destination IS NULL) " +
+        "AND t.customer LIKE :customer";
+
+    public Collection<VallBoxesMaineExit> getShipContTowerDataWithRegAll(SCTtabAllFilter destinationJson) {
+
+        List<VallBoxesMaineExit> listToReturn = new ArrayList<>();
+
+        String stringDestinationTot =
+            ConstantVar.trimAndManageApostrophe(destinationJson.getDest(), VAR.DELIMITATOR);
+
+        String stringDestinationFilter =
+            ConstantVar.trimAndManageApostrophe(
+                destinationJson.getFilter().getFirst().getDestS(),
+                VAR.DELIMITATOR
+            );
+
+        String stringRegionFilter =
+            ConstantVar.trimAndManageApostrophe(
+                destinationJson.getFilter().getFirst().getReg(),
+                VAR.DELIMITATOR
+            );
+
+        try {
+
+            String destinationQuery;
+            if (destinationJson.getFilter().getFirst().getDestS() == null
+                || destinationJson.getFilter().getFirst().getDestS().isEmpty()
+                || "%".equals(destinationJson.getFilter().getFirst().getDestS())
+                || "null".equals(destinationJson.getFilter().getFirst().getDestS())) {
+
+                destinationQuery = stringDestinationTot;
+            } else {
+                destinationQuery = stringDestinationFilter;
+            }
+
+            StringBuilder sql = new StringBuilder(Q_GET_SHIP_CONTROL_TOW_GET_DESTINATION_WITH_STATUS_ALL);
+
+            if (!"%".equals(destinationJson.getFilter().getFirst().getSrlinv())) {
+                sql.append(" AND t.srl_invoice LIKE :srlinv");
+            }
+
+            if (!"('%')".equals(stringRegionFilter)) {
+                sql.append(" AND t.region IN :regions");
+            }
+
+            Query query = em.createNativeQuery(sql.toString(), VallBoxesMaineExit.class);
+
+            query.setParameter(
+                "destinations",
+                toList(destinationQuery)
+            );
+
+            query.setParameter(
+                "customer",
+                "%" + destinationJson.getFilter().getFirst().getCust() + "%"
+            );
+
+            if (!"%".equals(destinationJson.getFilter().getFirst().getSrlinv())) {
+                query.setParameter(
+                    "srlinv",
+                    destinationJson.getFilter().getFirst().getSrlinv()
+                );
+            }
+
+            if (!"('%')".equals(stringRegionFilter)) {
+                query.setParameter(
+                    "regions",
+                    toList(stringRegionFilter)
+                );
+            }
+
+            listToReturn = query.getResultList();
+
+        } catch (Exception e) {
+            System.out.println(
+                "--------------------->>> Exception in method getShipContTowerDataWithRegAll"
+            );
+            e.printStackTrace();
+        }
+
+        return listToReturn;
+    }
+
+    /**
+     * Helper method to convert SQL IN-clause string into List
+     * Example: "('A','B')" → ["A", "B"]
+     */
+    private static List<String> toList(String inClause) {
+        if (inClause == null || inClause.isBlank()) {
+            return List.of();
+        }
+
+        String cleaned = inClause
+            .replace("(", "")
+            .replace(")", "")
+            .replace("'", "");
+
+        String[] values = cleaned.split(",");
+
+        List<String> result = new ArrayList<>();
+        for (String v : values) {
+            if (!v.isBlank()) {
+                result.add(v.trim());
+            }
+        }
+        return result;
+    }
+}
